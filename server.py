@@ -52,7 +52,7 @@ def encapsulation(operation, answer, id, data):
 
 def deencapsulation(recv_t):
     recv = str(recv_t[0])
-    print("Gowno: " + recv)
+    print(recv)
     operation = recv[recv.find("<Operacja>") + 10: recv.find("<Odpowiedz>")]
     answer = recv[recv.find("<Odpowiedz>") + 11: recv.find("<Identyfikator>")]
     id = recv[recv.find("<Identyfikator>") + 15: recv.find("<Dane>")]
