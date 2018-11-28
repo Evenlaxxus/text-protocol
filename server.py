@@ -85,6 +85,12 @@ def receive_data():
         return None
 
 
+def wait_for_conf():
+    while True:
+        if receive_data()["Operacja"] == "Conf":
+            break
+
+
 host = "127.0.0.1"
 port = 27015
 id_list = init_id()
@@ -95,6 +101,7 @@ def client_thread(ip, port):
     addr = (ip, port)
     if len(id_list) == 0:
         sock.sendto(encapsulation("Full", "", "", "").encode(encoding='UTF-8'), addr)
+        print("Somebody tried to start session")
     else:
         is_active = True
         session_id = id_list.pop(0)
@@ -106,26 +113,41 @@ def client_thread(ip, port):
             data = receive_data()
             if data:
                 if data["Operacja"] == "ID":
-                    sock.sendto(encapsulation("ID", "", session_id, "").encode(encoding='UTF-8'), addr)
+                    sock.sendto(encapsulation("ID", "", str(session_id), "").encode(encoding='UTF-8'), addr)
+                    print("Sending ID [" + str(session_id) + "] to client" )
+                    wait_for_conf()
                 elif data["Operacja"] == "Num":
                     if len(numbers) == 0:
                         numbers[0] = int(data["Dane"])
+                        sock.sendto(encapsulation("Con", "Next", session_id, ""), addr)
+                        print("Cliet [" + "] sent first number: " + str(numbers[0]))
+                        wait_for_conf()
                     elif len(numbers) == 1:
                         numbers[1] = int(data["Dane"])
                         attempts = make_attempt(numbers[0], numbers[1])
                         secret = random.randint(0, 255)
+                        sock.sendto(encapsulation("Con", "OK", session_id, ""), addr)
+                        print("Client [" + "] sent second number: " + str(numbers[1]))
+                        print("Secret number is " + secret + ", number of attempts is " + attempts)
+                        wait_for_conf()
                 elif data["Operacja"] == "Try":
                     if int(data["Dane"] == secret):
                         sock.sendto(encapsulation("Ans", "TAK", session_id, "").encode(encoding='UTF-8'), addr)
-                        is_active = False
-                        id_list.append(str(session_id))
+                        print("Client guessed our secret")
+                        wait_for_conf()
                     elif attempts == 0:
                         sock.sendto(encapsulation("Ans", "END", session_id, ""), addr)
-                        is_active = False
-                        id_list.append(str(session_id))
+                        print("Client guessed  has no attempts left")
+                        wait_for_conf()
                     else:
                         sock.sendto(encapsulation("Ans", "NXT", session_id, ""), addr)
-
+                        print("Client guessed wrong")
+                        wait_for_conf()
+                elif data["Operacja"] == "Bye":
+                    sock.sendto(encapsulation("Bye", "", session_id, ""), addr)
+                    print("Ending session")
+                    is_active = False
+                    id_list.append(str(session_id))
 
 
 try:
@@ -146,7 +168,7 @@ while True:
     # print("Message: ", data)
     try:
         if data1["Operacja"] == "Hi":
-            threading.Thread(target=client_thread, args=(host, port)).start()
+            client_thread(host, port)
     except:
         print("Thread did not start.")
         traceback.print_exc()
