@@ -57,6 +57,7 @@ def deencapsulation(recv_t):
     answer = recv[recv.find("<Odpowiedz>") + 11: recv.find("<Identyfikator>")]
     id = recv[recv.find("<Identyfikator>") + 15: recv.find("<Dane>")]
     data = recv[recv.find("<Dane>") + 6: len(recv) - 1]
+    print(operation+" "+answer)
     return {"Operacja": operation, "Odpowiedz": answer, "ID": id, "Dane": data}
 
 
@@ -109,10 +110,14 @@ def client_thread(ip, port):
         secret = 0
         attempts = 0
         sock.sendto(encapsulation("Hi", "", "", "").encode(encoding='UTF-8'), addr)
+        print("tu?")
+        data="chuj bombka"
         while is_active:
             data = receive_data()
+            print("no kurwo babilońska")
             if data:
                 if data["Operacja"] == "ID":
+
                     sock.sendto(encapsulation("ID", "", str(session_id), "").encode(encoding='UTF-8'), addr)
                     print("Sending ID [" + str(session_id) + "] to client" )
                     wait_for_conf()
@@ -120,7 +125,7 @@ def client_thread(ip, port):
                     if len(numbers) == 0:
                         numbers[0] = int(data["Dane"])
                         sock.sendto(encapsulation("Con", "Next", session_id, ""), addr)
-                        print("Cliet [" + "] sent first number: " + str(numbers[0]))
+                        print("Client [" + "] sent first number: " + str(numbers[0]))
                         wait_for_conf()
                     elif len(numbers) == 1:
                         numbers[1] = int(data["Dane"])
@@ -174,33 +179,121 @@ while True:
         traceback.print_exc()
 
 
-# class ThreadedUDPRequestHandler(socketserver.BaseRequestHandler):
+import socketserver
+import threading
+import random
+
+# Create a tuple with IP Address and Port Number
+ServerAddress = ("127.0.0.1", 8888)
+
+def init_id():
+    x = random.randint(100, 200)
+    return [x, x+1]
+id_list = init_id()
+
+# Subclass the DatagramRequestHandler
+class MyUDPRequestHandler(socketserver.DatagramRequestHandler):
+
+    # Override the handle() method
+
+    def handle(self):
+        global id_list
+        is_active = True
+        no_ack=True
+        session_id = id_list.pop(0)
+        numbers = []
+        secret = 0
+        attempts = 0
+        datagram=self.rfile.readline().strip()
+        if data["Operacja"]=="Hi":
+            if len(id_list)==0:
+             self.wfile.write("fuck off".encode(encoding='UTF-8'))
+             print("Somebody tried to start session")
+            else:
+              self.wfile.write("siemano".encode(encoding='UTF-8'))
+        while is_active:
+            while no_ack:
+                datagram=self.rfile.readline().strip()
+                if datagram["coś"]=="ack":
+                    no_ack=False
+        datagram=self.rfile.readline().strip()
+        if datagram["Operacja"] == "ID":
+
+            self.wfile.write("coś")
+            #sock.sendto(encapsulation("ID", "", str(session_id), "").encode(encoding='UTF-8'), addr)
+            print("Sending ID [" + str(session_id) + "] to client")
+        elif datagram["Operacja"] == "Num":
+            if len(numbers) == 0:
+                numbers[0] = int(data["Dane"])
+                sock.sendto(encapsulation("Con", "Next", session_id, ""), addr)
+                print("Client [" + "] sent first number: " + str(numbers[0]))
+                wait_for_conf()
+            elif len(numbers) == 1:
+                numbers[1] = int(data["Dane"])
+                attempts = make_attempt(numbers[0], numbers[1])
+                secret = random.randint(0, 255)
+                sock.sendto(encapsulation("Con", "OK", session_id, ""), addr)
+                print("Client [" + "] sent second number: " + str(numbers[1]))
+                print("Secret number is " + secret + ", number of attempts is " + attempts)
+                wait_for_conf()
+        elif data["Operacja"] == "Try":
+            if int(data["Dane"] == secret):
+                sock.sendto(encapsulation("Ans", "TAK", session_id, "").encode(encoding='UTF-8'), addr)
+                print("Client guessed our secret")
+                wait_for_conf()
+            elif attempts == 0:
+                sock.sendto(encapsulation("Ans", "END", session_id, ""), addr)
+                print("Client guessed  has no attempts left")
+                wait_for_conf()
+            else:
+                sock.sendto(encapsulation("Ans", "NXT", session_id, ""), addr)
+                print("Client guessed wrong")
+                wait_for_conf()
+        elif data["Operacja"] == "Bye":
+            sock.sendto(encapsulation("Bye", "", session_id, ""), addr)
+            print("Ending session")
+            is_active = False
+            id_list.append(str(session_id))
+
+
+
+
+
+        #sprawdz czy mniej niż 3
+
+        datagram = self.rfile.readline().strip()
+
+        print("Datagram Recieved from client is:".format(datagram))
+
+        print(datagram)
+
+        # Print the name of the thread
+
+        print("Thread Name:{}".format(threading.current_thread().name))
+
+        # Send a message to the client
+
+        self.wfile.write("Message from Server! Hello Client".encode(encoding='UTF-8'))
+
+
+# Create a Server Instance
+
+UDPServerObject = socketserver.ThreadingUDPServer(ServerAddress, MyUDPRequestHandler)
+
+# Make the server wait forever serving connections
+
+UDPServerObject.serve_forever()
+
+## obsluga protokolu:
+# ->sprawdzenie, czy jest tylko dwóch, jak trzeci to nara (wyślij 'nara')
+# ->jak się mieści w przedziale to odsyłam 'hi'
+# ->id
+# ->numery dwa
+# ->zgaduj liczbę, odliczaj ilość prób
+# ->
 #
-#     def handle(self):
-#         data = self.request[0].strip()
-#         socket = self.request[1]
-#         current_thread = threading.current_thread()
-#         print("{}: client: {}, wrote: {}".format(current_thread.name, self.client_address, data))
-#         socket.sendto(data.upper(), self.client_address)
 #
 #
-# class ThreadedUDPServer(socketserver.ThreadingMixIn, socketserver.UDPServer):
-#     pass
 #
 #
-# if __name__ == "__main__":
-#     HOST, PORT = "127.0.0.1", 27015
-#
-#     server = ThreadedUDPServer((HOST, PORT), ThreadedUDPRequestHandler)
-#
-#     server_thread = threading.Thread(target=server.serve_forever)
-#     server_thread.daemon = True
-#
-#     try:
-#         server_thread.start()
-#         print("Server started at {} port {}".format(HOST, PORT))
-#         while True: time.sleep(100)
-#     except (KeyboardInterrupt, SystemExit):
-#         server.shutdown()
-#         server.server_close()
-#         exit()
+##
