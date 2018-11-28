@@ -205,11 +205,13 @@ class MyUDPRequestHandler(socketserver.DatagramRequestHandler):
         secret = 0
         attempts = 0
         datagram=self.rfile.readline().strip()
-        if data["Operacja"]=="Hi":
+        if datagram["Operacja"]=="Hi":
             if len(id_list)==0:
+             self.wfile.write("ack".encode(encoding='UTF-8'))
              self.wfile.write("fuck off".encode(encoding='UTF-8'))
              print("Somebody tried to start session")
             else:
+              self.wfile.write("ack".encode(encoding='UTF-8'))
               self.wfile.write("siemano".encode(encoding='UTF-8'))
         while is_active:
             while no_ack:
@@ -218,33 +220,32 @@ class MyUDPRequestHandler(socketserver.DatagramRequestHandler):
                     no_ack=False
         datagram=self.rfile.readline().strip()
         if datagram["Operacja"] == "ID":
-
             self.wfile.write("coś")
             #sock.sendto(encapsulation("ID", "", str(session_id), "").encode(encoding='UTF-8'), addr)
             print("Sending ID [" + str(session_id) + "] to client")
         elif datagram["Operacja"] == "Num":
             if len(numbers) == 0:
-                numbers[0] = int(data["Dane"])
-                sock.sendto(encapsulation("Con", "Next", session_id, ""), addr)
+                numbers[0] = int(datagram["Dane"])
+                self.wfile.write("conn,next,session_id")
+                #sock.sendto(encapsulation("Con", "Next", session_id, ""), addr)
                 print("Client [" + "] sent first number: " + str(numbers[0]))
-                wait_for_conf()
             elif len(numbers) == 1:
-                numbers[1] = int(data["Dane"])
+                numbers[1] = int(datagram["Dane"])
                 attempts = make_attempt(numbers[0], numbers[1])
                 secret = random.randint(0, 255)
-                sock.sendto(encapsulation("Con", "OK", session_id, ""), addr)
+                self.wfile.write("con,ok,session_id")
+               # sock.sendto(encapsulation("Con", "OK", session_id, ""), addr)
                 print("Client [" + "] sent second number: " + str(numbers[1]))
                 print("Secret number is " + secret + ", number of attempts is " + attempts)
-                wait_for_conf()
-        elif data["Operacja"] == "Try":
-            if int(data["Dane"] == secret):
-                sock.sendto(encapsulation("Ans", "TAK", session_id, "").encode(encoding='UTF-8'), addr)
-                print("Client guessed our secret")
-                wait_for_conf()
+        elif datagram["Operacja"] == "Try":
+            if int(datagram["Dane"] == secret):
+                self.wfile.write("ans,tak,sessionid")
+                #sock.sendto(encapsulation("Ans", "TAK", session_id, "").encode(encoding='UTF-8'), addr)
+                print("Client guessed our secret number")
             elif attempts == 0:
-                sock.sendto(encapsulation("Ans", "END", session_id, ""), addr)
+                self.wfile.write("ans,end,sessionid")
+               # sock.sendto(encapsulation("Ans", "END", session_id, ""), addr)
                 print("Client guessed  has no attempts left")
-                wait_for_conf()
             else:
                 sock.sendto(encapsulation("Ans", "NXT", session_id, ""), addr)
                 print("Client guessed wrong")
