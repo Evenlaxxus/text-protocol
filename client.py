@@ -43,9 +43,9 @@ message = encapsulation("Hi", "", "", "")
 
 sock.sendto(message.encode(encoding='UTF-8'), (host, port))
 
-# message = encapsulation("ID", "", "", "")
-#
-# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
+message = encapsulation("ID", "", "", "")
+
+sock.sendto(message.encode(encoding='UTF-8'), (host, port))
 
 # data = sock.recvfrom(4096)
 # print(data)
