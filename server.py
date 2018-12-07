@@ -15,14 +15,28 @@
 # END       wykorzystano wszystkie próby
 # NXT       podaj kolejną liczbę
 #########################################################
-
-import socket
-import sys
-import datetime
-import random
-import math
-import threading
-import traceback
+#        C       S       C
+#    Hi->        |      <-Hi
+#              / | \
+#       <-Con |  |  | Con->
+#        <-Hi |  |  | Hi->
+# thread sleep|  |  | thread sleeps
+#
+#               .
+#               .
+#               .
+# -------------------------------------
+# C1            MT           C2
+# Info->        |
+#             Info od C1?
+#             Y: Info->CL1_comqu, wake up thread 1
+#                N:
+#             Info od C2?
+#               Y:Info->Cl2_comqu, wake up thread 2
+#               N:
+#             Unknown client, send "FULL"
+#
+#########################################################
 
 import socket
 from threading import Event, Thread, Lock
@@ -34,21 +48,24 @@ import math
 import time
 from timeit import default_timer as timer
 
+# eventy do zatrzymywania wątku
 ev1 = Event()
 ev2 = Event()
+# kolejki do przechowywania komunikatów
 CL1_comqu = queue.Queue(maxsize=3)
 CL2_comqu = queue.Queue(maxsize=3)
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 Comlist = [CL1_comqu, CL2_comqu]
-evlist=[ev1,ev2]
-cli_addr_list=[tuple(),tuple()]
+evlist = [ev1, ev2]
+cli_addr_list = [tuple(), tuple()]
+
+
 def init_id():
     x = random.randint(100, 200)
     return [x, x + 1]
 
-id_list=init_id()
 
-
+id_list = init_id()
 
 
 def is_empty(any_structure):
@@ -60,7 +77,7 @@ def is_empty(any_structure):
         return True
 
 
-#w razie wu to
+# w razie wu to
 # utc_timestamp=datetime.datetime.utcnow().timestamp()
 #
 # from datetime import timezone
@@ -71,10 +88,12 @@ def is_empty(any_structure):
 def encapsulation(operation, answer, id, data):
     time = datetime.datetime.now().replace(microsecond=0)
 
-    if data =="":
-        return "Data" + ">" +  str(time) + "<" + "Operacja" + ">" + operation + "<" + "Odpowiedz" + ">" + answer + "<" + "Identyfikator" + ">" + id+"<"
+    if data == "":
+        return "Data" + ">" + str(
+            time) + "<" + "Operacja" + ">" + operation + "<" + "Odpowiedz" + ">" + answer + "<" + "Identyfikator" + ">" + id + "<"
     else:
-        return "Data" + ">" +  str(time) + "<" + "Operacja" + ">" + operation + "<" + "Odpowiedz" + ">" + answer + "<" + "Identyfikator" + ">" + id + "<" + "Dane" + ">" + data+"<"
+        return "Data" + ">" + str(
+            time) + "<" + "Operacja" + ">" + operation + "<" + "Odpowiedz" + ">" + answer + "<" + "Identyfikator" + ">" + id + "<" + "Dane" + ">" + data + "<"
 
 
 def deencapsulation(recv_t):
@@ -82,60 +101,62 @@ def deencapsulation(recv_t):
     recv = str(recv_t[0])
     operation = recv[recv.find("<Operacja>") + 10: recv.find("<Odpowiedz>")]
     answer = recv[recv.find("<Odpowiedz>") + 11: recv.find("<Identyfikator>")]
-    if recv.find("<Dane>")==-1:
+    if recv.find("<Dane>") == -1:
         id = recv[recv.find("<Identyfikator>") + 15: recv.rfind("<")]
     else:
         id = recv[recv.find("<Identyfikator>") + 15: recv.rfind("<Dane")]
-    data = recv[recv.find("<Dane>") + 6: recv.rfind("<")] #to działa jak danych nie ma? jeszcze nie wiem
+    data = recv[recv.find("<Dane>") + 6: recv.rfind("<")]  # to działa jak danych nie ma? jeszcze nie wiem
     return {"Operacja": operation, "Odpowiedz": answer, "ID": id, "Dane": data}
 
 
 def wipe(id):
     global cli_addr_list
-    a=tuple()
-    cli_addr_list[id]=a
+    a = tuple()
+    cli_addr_list[id] = a
 
 
-def clienthread(addr, ThID,session_id):
-    global id_list,cli_addr_list
+def clienthread(addr, ThID, session_id):
+    global id_list, cli_addr_list
     sock.sendto(encapsulation("Con", "", "", "").encode(encoding='UTF-8'), addr)
     sock.sendto(encapsulation("Hi", "", "", "").encode(encoding='UTF-8'), addr)
-    numbers=[]
-    secret=0
-    attempts=0
-    connection=True
-    evlist[ThID].wait() #tutaj jest wait
+    numbers = []
+    secret = 0
+    attempts = 0
+    connection = True
+    evlist[ThID].wait()  # tutaj jest wait
     while connection:
         while not Comlist[ThID].empty():
             x = Comlist[ThID].get()
             if x["Operacja"] == "Con":
-                print("["+str(session_id)+"] Data confirmed.")
-                x=Comlist[ThID].get()
-                if x["Operacja"]=="ID":
+                print("[" + str(session_id) + "] Data confirmed.")
+                x = Comlist[ThID].get()
+                if x["Operacja"] == "ID":
                     sock.sendto(encapsulation("Con", "", "", "").encode(encoding='UTF-8'), addr)
-                    datax=encapsulation("ID", "", str(session_id), "")
+                    datax = encapsulation("ID", "", str(session_id), "")
                     sock.sendto(datax.encode(encoding='UTF-8'), addr)
                     print("[" + str(session_id) + "] Sending ID [" + str(session_id) + "] to client")
-                elif x["Operacja"]=="Num":
-                    if len(numbers)==0:
+                elif x["Operacja"] == "Num":
+                    if len(numbers) == 0:
                         numbers.append(int(x["Dane"]))
                         print("[" + str(x["ID"]) + "] Client sent first number: " + str(numbers[0]))
                         sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
                         sock.sendto(encapsulation("Num", "NXT", str(session_id), "").encode(encoding='UTF-8'), addr)
-                    elif len(numbers)==1:
+                    elif len(numbers) == 1:
                         numbers.append(int(x["Dane"]))
                         print("[" + str(session_id) + "] Client sent second number: " + str(numbers[1]))
                         attempts = int(math.floor((numbers[0] + numbers[1]) / 2))
                         secret = random.randint(0, 1000)
-                        print("["+str(session_id)+"] Secret number is " + str(secret) + ", number of attempts is " + str(attempts))
+                        print("[" + str(session_id) + "] Secret number is " + str(
+                            secret) + ", number of attempts is " + str(attempts))
                         sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
-                        sock.sendto(encapsulation("Num", "", str(session_id), str(attempts)).encode(encoding='UTF-8'), addr)
-                elif x["Operacja"]=="Try":
-                    if int(x["Dane"])==secret:
+                        sock.sendto(encapsulation("Num", "", str(session_id), str(attempts)).encode(encoding='UTF-8'),
+                                    addr)
+                elif x["Operacja"] == "Try":
+                    if int(x["Dane"]) == secret:
                         sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
                         sock.sendto(encapsulation("Ans", "TAK", str(session_id), "").encode(encoding='UTF-8'), addr)
-                        print("["+str(session_id)+"] Client guessed our secret")
-                    elif attempts==1: #bo zero też liczył,
+                        print("[" + str(session_id) + "] Client guessed our secret")
+                    elif attempts == 1:  # bo zero też liczył,
                         sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
                         sock.sendto(encapsulation("Ans", "END", str(session_id), "").encode(encoding='UTF-8'), addr)
                         print("[" + str(session_id) + "] Client has no attempts left")
@@ -151,7 +172,7 @@ def clienthread(addr, ThID,session_id):
                     connection = False
                     id_list.append(str(session_id))
                     wipe(ThID)
-            elif x["Operacja"]=="Bye":
+            elif x["Operacja"] == "Bye":
                 sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
                 sock.sendto(encapsulation("Bye", "", str(session_id), "").encode(encoding='UTF-8'), addr)
                 print("[" + str(session_id) + "] Ending session")
@@ -169,19 +190,19 @@ def clienthread(addr, ThID,session_id):
 
 
 def mainthread(sock):
-    global Comlist,id_list
+    global Comlist, id_list
     print("Main thread start.")
     while True:
-        x = sock.recvfrom(8192) #w najgorszym wypadku w buforze będzie con+coś z dwóch
+        x = sock.recvfrom(8192)  # w najgorszym wypadku w buforze będzie con+coś z dwóch
         data1 = deencapsulation(x)
         if data1["Operacja"] == "Hi":
             if is_empty(cli_addr_list[0]) and is_empty(cli_addr_list[1]):
                 cli_addr_list[0] = x[1]
 
-                Thread(target=clienthread, args=(cli_addr_list[0], 0,id_list.pop(0))).start()
+                Thread(target=clienthread, args=(cli_addr_list[0], 0, id_list.pop(0))).start()
             elif is_empty(cli_addr_list[0]) == False and is_empty(cli_addr_list[1]):
                 cli_addr_list[1] = x[1]
-                Thread(target=clienthread, args=(cli_addr_list[1], 1,id_list.pop(0))).start()
+                Thread(target=clienthread, args=(cli_addr_list[1], 1, id_list.pop(0))).start()
             else:  # both taken
                 print("Someone tried to connect, all seats taken.")
                 sock.sendto(encapsulation("Con", "", "", "").encode(encoding='UTF-8'), x[1])
@@ -193,9 +214,6 @@ def mainthread(sock):
             elif x[1] == cli_addr_list[1]:
                 Comlist[1].put(data1)
                 evlist[1].set()
-
-
-
 
 
 def main():
@@ -210,13 +228,6 @@ def main():
 
     Thread(target=mainthread, args=(sock,)).start()
 
+
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
