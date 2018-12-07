@@ -59,12 +59,15 @@ def main():
     global time_exceeded
     session_id = ""
     attempts = 0
-    serverAdressPort = (host, port)
 
+
+    a=str(input("Enter ip:"))
+    if a!="":
+        host=a
     print("IP: ", host)
     print("Port: ", port)
 
-
+    serverAdressPort = (host, port)
 
 
     message = encapsulation("Hi", "", "", "")
