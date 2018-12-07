@@ -15,148 +15,213 @@
 #########################################################
 #                     Odpowiedzi serwera
 # TAK       klient zgadł liczbę
+# NIE       klient nie zgadł liczby
 # END       wykorzystano wszystkie próby
 # NXT       podaj kolejną liczbę
 #########################################################
-## TRY,RDY-> serwer gotów do zgadywanka
 
-import socketserver
-import threading
-import random
+import socket
+import sys
 import datetime
+import random
 import math
-import re
+import threading
+import traceback
 
+import socket
+from threading import Event, Thread, Lock
+import sys
+import datetime
+import queue
+import random
+import math
+import time
+from timeit import default_timer as timer
 
-# string do wysłania
-def encapsulation(operation, answer, id, data):
-    time = datetime.datetime.now().time().replace(microsecond=0)
-    if data is None:
-        data = ""
-    return "[" + str(
-        time) + "]" + "Operacja>" + operation + "<" + "Odpowiedz>" + answer + "<" + "Identyfikator>" + id + "<" + "Dane>" + data + "<"
-
-
-def deencapsulation(datagram_):
-    datagram = str(datagram_)
-    operation = datagram[datagram.find("Operacja>") + 9:datagram.find("<Odpowiedz>")]
-    answer = datagram[datagram.find("<Odpowiedz>") + 11:datagram.find("<Identyfikator>")]
-    id = datagram[datagram.find("<Identyfikator>") + 15:datagram.find("<Dane>")]
-    data = datagram[datagram.find("<Dane>") + 6:len(datagram) - 1]
-    # print(operation + " " + answer) to potrzebne?
-
-    return {"Operacja": operation, "Odpowiedz": answer, "ID": id, "Dane": data}
-
-
-def make_attempt(L1, L2):
-    attempts = int(math.floor((L1 + L2) / 2))
-    return attempts
-
-
+ev1 = Event()
+ev2 = Event()
+CL1_comqu = queue.Queue(maxsize=3)
+CL2_comqu = queue.Queue(maxsize=3)
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+Comlist = [CL1_comqu, CL2_comqu]
+evlist=[ev1,ev2]
+cli_addr_list=[tuple(),tuple()]
 def init_id():
     x = random.randint(100, 200)
     return [x, x + 1]
 
-
-# Create a tuple with IP Address and Port Number
-ServerAddress = ("127.0.0.1", 8888)
-
-id_list = init_id()
+id_list=init_id()
 
 
-# do wysyłania trzeba enkodować, przy odbiorze chyba nie
-# odbierz dane-> data=deencapsulation(self.rfile.readline().strip())
-# wyslij dane-> self.wfile.write(encapsulation(OP,RESP,ID,DATA).encode(encoding='UTF-8'))
 
-# Subclass the DatagramRequestHandler
-class MyUDPRequestHandler(socketserver.DatagramRequestHandler):
-    # Override the handle() method
-    def handle(self):
-        global id_list
-        is_active = True
-        no_ack = True
-        session_id = id_list.pop(0)
-        numbers = []
-        secret = 0
-        attempts = 0
-        data = deencapsulation(self.rfile.readline().strip())
-        if data["Operacja"] == "Hi":
-            if len(id_list) == 0:
-                self.wfile.write(encapsulation("Con", "", "", "").encode(encoding='UTF-8'))
-                self.wfile.write(encapsulation("Full", "", "", "").encode(encoding='UTF-8'))
-                print("Somebody tried to start session")
+
+def is_empty(any_structure):
+    if any_structure:
+        # print('Structure is not empty.')
+        return False
+    else:
+        # print('Structure is empty.')
+        return True
+
+
+#w razie wu to
+# utc_timestamp=datetime.datetime.utcnow().timestamp()
+#
+# from datetime import timezone
+# dt = datetime(2015, 10, 19)
+# timestamp = dt.replace(tzinfo=timezone.utc).timestamp()
+# print(timestamp)
+
+def encapsulation(operation, answer, id, data):
+    time = datetime.datetime.now().replace(microsecond=0)
+
+    if data =="":
+        return "Data" + ">" +  str(time) + "<" + "Operacja" + ">" + operation + "<" + "Odpowiedz" + ">" + answer + "<" + "Identyfikator" + ">" + id+"<"
+    else:
+        return "Data" + ">" +  str(time) + "<" + "Operacja" + ">" + operation + "<" + "Odpowiedz" + ">" + answer + "<" + "Identyfikator" + ">" + id + "<" + "Dane" + ">" + data+"<"
+
+
+def deencapsulation(recv_t):
+    global addr_c
+    recv = str(recv_t[0])
+    operation = recv[recv.find("<Operacja>") + 10: recv.find("<Odpowiedz>")]
+    answer = recv[recv.find("<Odpowiedz>") + 11: recv.find("<Identyfikator>")]
+    if recv.find("<Dane>")==-1:
+        id = recv[recv.find("<Identyfikator>") + 15: recv.rfind("<")]
+    else:
+        id = recv[recv.find("<Identyfikator>") + 15: recv.rfind("<Dane")]
+    data = recv[recv.find("<Dane>") + 6: recv.rfind("<")] #to działa jak danych nie ma? jeszcze nie wiem
+    return {"Operacja": operation, "Odpowiedz": answer, "ID": id, "Dane": data}
+
+
+def wipe(id):
+    global cli_addr_list
+    a=tuple()
+    cli_addr_list[id]=a
+
+
+def clienthread(addr, ThID,session_id):
+    global id_list,cli_addr_list
+    sock.sendto(encapsulation("Con", "", "", "").encode(encoding='UTF-8'), addr)
+    sock.sendto(encapsulation("Hi", "", "", "").encode(encoding='UTF-8'), addr)
+    numbers=[]
+    secret=0
+    attempts=0
+    connection=True
+    #print("Waiting for flag to be yeet"+str(ThID))
+    evlist[ThID].wait()
+    while connection:
+        while not Comlist[ThID].empty():
+            x = Comlist[ThID].get()
+            if x["Operacja"] == "Con":
+                print("Data confirmed.")
+                x=Comlist[ThID].get()
+                if x["Operacja"]=="ID":
+                    sock.sendto(encapsulation("Con", "", "", "").encode(encoding='UTF-8'), addr)
+                    datax=encapsulation("ID", "", str(session_id), "")
+                    sock.sendto(datax.encode(encoding='UTF-8'), addr)
+                    print("Sending ID [" + str(session_id) + "] to client")
+                elif x["Operacja"]=="Num":
+                    if len(numbers)==0:
+                        numbers.append(int(x["Dane"]))
+                        print("Client [" + str(x["ID"]) + "] sent first number: " + str(numbers[0]))
+                        sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
+                        sock.sendto(encapsulation("Num", "NXT", str(session_id), "").encode(encoding='UTF-8'), addr)
+                    elif len(numbers)==1:
+                        numbers.append(int(x["Dane"]))
+                        print("Client [" + str(session_id) + "] sent second number: " + str(numbers[1]))
+                        attempts = int(math.floor((numbers[0] + numbers[1]) / 2))
+                        secret = random.randint(0, 255)
+                        print("Secret number is " + str(secret) + ", number of attempts is " + str(attempts))
+                        sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
+                        sock.sendto(encapsulation("Num", "", str(session_id), str(attempts)).encode(encoding='UTF-8'), addr)
+                elif x["Operacja"]=="Try":
+                    if int(x["Dane"])==secret:
+                        sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
+                        sock.sendto(encapsulation("Ans", "TAK", str(session_id), "").encode(encoding='UTF-8'), addr)
+                        print("Client guessed our secret")
+                    elif attempts==0:
+                        sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
+                        sock.sendto(encapsulation("Ans", "END", str(session_id), "").encode(encoding='UTF-8'), addr)
+                        print("Client guessed  has no attempts left")
+                    else:
+                        sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
+                        sock.sendto(encapsulation("Ans", "NXT", str(session_id), "").encode(encoding='UTF-8'), addr)
+                        print("Client guessed wrong")
+                        attempts = attempts - 1
+                elif x["Operacja"] == "Bye":
+                    sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
+                    sock.sendto(encapsulation("Bye", "", str(session_id), "").encode(encoding='UTF-8'), addr)
+                    print("Ending session")
+                    connection = False
+                    id_list.append(str(session_id))
+                    wipe(ThID)
+            elif x["Operacja"]=="Bye":
+                sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
+                sock.sendto(encapsulation("Bye", "", str(session_id), "").encode(encoding='UTF-8'), addr)
+                print("Ending session")
+                connection = False
+                id_list.append(str(session_id))
+                wipe(ThID)
             else:
-                self.wfile.write(encapsulation("Con", "", "", "").encode(encoding='UTF-8'))
-                self.wfile.write(encapsulation("Hi", "", "", "").encode(encoding='UTF-8'))
-                print("Guest connected.")
-        while is_active:
-            while no_ack:
-                data = deencapsulation(self.rfile.readline().strip())
-                if data["Operacja"] == "Con":
-                    no_ack = False
-        data = deencapsulation(self.rfile.readline().strip())
-        if data["Operacja"] == "ID":
-            self.wfile.write(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'))
-            self.wfile.write(encapsulation("ID", "", str(session_id), "").encode(encoding='UTF-8'))
-            print("Sending ID [" + str(session_id) + "] to client")
-        elif data["Operacja"] == "Num":
-            if len(numbers) == 0:
-                numbers[0] = int(data["Dane"])
-                self.wfile.write(encapsulation("Con", "NXT", str(session_id), "").encode(encoding='UTF-8'))
-                print("Client [" + str(session_id) + "] sent first number: " + str(numbers[0]))
-            elif len(numbers) == 1:
-                numbers[1] = int(data["Dane"])
-                attempts = make_attempt(numbers[0], numbers[1])
-                secret = random.randint(0, 1000)
-                self.wfile.write(encapsulation("Con", "", str(session_id), "").encode(
-                    encoding='UTF-8'))  # todo-> rafał sprawdź, bo mi to ok tu nie pasuje
-                self.wfile.write(encapsulation("Try", "RDY", str(session_id), "").encode(encoding='UTF-8'))
-                print("Client [" + str(session_id) + "] sent second number: " + str(numbers[1]))
-                print("Secret number is " + str(secret) + ", number of attempts is " + str(attempts))
-                print("Server is ready for a game.")
-                # server ready for guessing
-        elif data["Operacja"] == "Try":
-            if int(data["Dane"] == secret):
-                self.wfile.write(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'))
-                self.wfile.write(encapsulation("Ans", "TAK", str(session_id), "").encode(encoding='UTF-8'))
-                print("Client guessed our secret number")
-            elif attempts == 0:
-                self.wfile.write(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'))
-                self.wfile.write(encapsulation("Ans", "END", str(session_id), "").encode(encoding='UTF-8'))
-                print("Client guessed  has no attempts left")
-            else:
-                self.wfile.write(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'))
-                self.wfile.write(encapsulation("Ans", "NXT", str(session_id), "").encode(encoding='UTF-8'))
-                attempts = attempts - 1
-                print("Client guessed wrong")
+                print("ERR, no con")
+        evlist[ThID].clear()
 
-        elif data["Operacja"] == "Bye":
-            self.wfile.write(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'))
-            self.wfile.write(encapsulation("Bye", "", str(session_id), "").encode(encoding='UTF-8'))
-            print("Ending session")
-            is_active = False
-            id_list.append(session_id)
-        # nie wiem jak zamknąć XD
+    # czekaj aż event ci powie, że możesz pracować dalej
+    # jak event ci powie, że możesz dalej pracować, to weź locka od maina
+    # przeparsuj co tam w tym kontenerze
+    # powrót do eventowego czekania
 
 
-# Create a Server Instance
+def mainthread(sock):
+    global Comlist,id_list
+    print("Main thread start.")
+    while True:
+        x = sock.recvfrom(8192) #w najgorszym wypadku w buforze będzie con+coś z dwóch
+        data1 = deencapsulation(x)
+        if data1["Operacja"] == "Hi":
+            if is_empty(cli_addr_list[0]) and is_empty(cli_addr_list[1]):
+                cli_addr_list[0] = x[1]
 
-UDPServerObject = socketserver.ThreadingUDPServer(ServerAddress, MyUDPRequestHandler)
+                Thread(target=clienthread, args=(cli_addr_list[0], 0,id_list.pop(0))).start()
+            elif is_empty(cli_addr_list[0]) == False and is_empty(cli_addr_list[1]):
+                cli_addr_list[1] = x[1]
+                Thread(target=clienthread, args=(cli_addr_list[1], 1,id_list.pop(0))).start()
+            else:  # both taken
+                print("Someone tried to connect, all seats taken.")
+                sock.sendto(encapsulation("Con", "", "", "").encode(encoding='UTF-8'), x[1])
+                sock.sendto(encapsulation("Full", "", "", "").encode(encoding='UTF-8'), x[1])
+        else:
+            if x[1] == cli_addr_list[0]:
+                Comlist[0].put(data1)
+                evlist[0].set()
+            elif x[1] == cli_addr_list[1]:
+                Comlist[1].put(data1)
+                evlist[1].set()
 
-# Make the server wait forever serving connections
 
-UDPServerObject.serve_forever()
 
-## obsluga protokolu:
-# ->sprawdzenie, czy jest tylko dwóch, jak trzeci to nara (wyślij 'nara')
-# ->jak się mieści w przedziale to odsyłam 'hi'
-# ->id
-# ->numery dwa
-# ->zgaduj liczbę, odliczaj ilość prób
-# ->
-#
-#
-#
-#
-#
-##
+
+
+def main():
+    UDP_IP = "127.0.0.1"
+    UDP_PORT = 27015
+
+    try:
+        sock.bind((UDP_IP, UDP_PORT))
+    except:
+        print("Bind failed. Error : " + str(sys.exc_info()))
+        sys.exit()
+
+    Thread(target=mainthread, args=(sock,)).start()
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
+
+
+

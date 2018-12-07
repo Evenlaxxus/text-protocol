@@ -1,119 +1,169 @@
 import socket
 import datetime
+import time
 
 
 def encapsulation(operation, answer, id, data):
-    time = datetime.datetime.now().time().replace(microsecond=0)
-    if data is None:
-        data = ""
-    return "[" + str(
-        time) + "]" + "Operacja>" + operation + "<" + "Odpowiedz>" + answer + "<" + "Identyfikator>" + id + "<" + "Dane>" + data + "<"
+    time = datetime.datetime.now().replace(microsecond=0)
+    if data =="":
+        return "Data" + ">" +  str(time) + "<" + "Operacja" + ">" + operation + "<" + "Odpowiedz" + ">" + answer + "<" + "Identyfikator" + ">" + id+"<"
+    else:
+        return "Data" + ">" +  str(time) + "<" + "Operacja" + ">" + operation + "<" + "Odpowiedz" + ">" + answer + "<" + "Identyfikator" + ">" + id + "<" + "Dane" + ">" + data+"<"
 
 
-def deencapsulation(datagram_):
-    print("cojeskuwa")
-    print(datagram_[0])
-    datagram = str(datagram_[0])
-    operation = datagram[datagram.find("Operacja>") + 9:datagram.find("<Odpowiedz>")]
-    answer = datagram[datagram.find("<Odpowiedz>") + 11:datagram.find("<Identyfikator>")]
-    id = datagram[datagram.find("<Identyfikator>") + 15:datagram.find("<Dane>")]
-    data = datagram[datagram.find("<Dane>") + 6:len(datagram) - 1]
-    # print(operation + " " + answer) to potrzebne?
-
+def deencapsulation(recv_t):
+    global addr_c
+    recv = str(recv_t[0])
+    operation = recv[recv.find("<Operacja>") + 10: recv.find("<Odpowiedz>")]
+    answer = recv[recv.find("<Odpowiedz>") + 11: recv.find("<Identyfikator>")]
+    if recv.find("<Dane>")==-1:
+        id = recv[recv.find("<Identyfikator>") + 15: recv.rfind("<")]
+    else:
+        id = recv[recv.find("<Identyfikator>") + 15: recv.rfind("<Dane")]
+    data = recv[recv.find("<Dane>") + 6: recv.rfind("<")] #to działa jak danych nie ma? jeszcze nie wiem
     return {"Operacja": operation, "Odpowiedz": answer, "ID": id, "Dane": data}
 
 
+def receive_data():
+    x = deencapsulation(sock.recvfrom(4096))
+    if x:
+        return x
+    else:
+        return None
+
+
 host = "127.0.0.1"
-port = 8888
-bufferSize=2048
-session = True
+port = 27015
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+def wait_for_conf():
+    while True:
 
-serverAdressPort=(host,port)
-print("IP: ", host)
-print("Port: ", port)
 
-sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-my_id=000
-tries=0
-connection_established=True
-con_received=False
-sock.sendto(encapsulation   ("Hi","","","").encode(encoding='UTF-8'),serverAdressPort)
-MFS=sock.recvfrom(bufferSize)
-print(MFS[0])
-while connection_established:
-    print ("linia 40")
-    while not con_received:
-        print ("linia 42")
-        MFS=deencapsulation(sock.recvfrom(bufferSize))
-        print("linia46")
-        print(MFS)
-        print("linia45")
-        if MFS["Operacja"]=="Con":
-            print("linia49")
-            con_received=True
-    MFS=deencapsulation(sock.recvfrom(bufferSize))
-    if MFS["Operacja"]=="Hi":
-        print("Server responded with \"Hi\". Asking for ID")
-        sock.sendto(encapsulation("Con","","","").encode(encoding='UTF-8'),serverAdressPort)
-        sock.sendto(encapsulation("ID","","","").encode(encoding='UTF-8'),serverAdressPort)
-    if MFS["Operacja"]=="Full":
-        print("Server is full.")
-        sock.sendto(encapsulation("Con","","","").encode(encoding='UTF-8'),serverAdressPort)
-        sock.sendto(encapsulation("Bye","","","").encode(encoding='UTF-8'),serverAdressPort)
-    if MFS["Operacja"]=="ID":
-        print("Server assigned me ID:" + MFS["ID"])
-        my_id=MFS["ID"]
-        sock.sendto(encapsulation("Con","","","").encode(encoding='UTF-8'),serverAdressPort)
-        a=input("Enter first even number:")
-        while a.isdigit() == False or (a.isdigit() == True and int(a)%2==0): #naturalne z zerem?
-            a = input('Enter an EVEN NUMBER: ')
-        sock.sendto(encapsulation("Num","","",str(a)).encode(encoding='UTF-8'),serverAdressPort)
-        MFS=deencapsulation(sock.recvfrom(bufferSize))
-        if MFS["Operacja"]=="Con" and ["Odpowiedz"]=="NXT":
-            a=input("Enter second even number: ")
-            while a.isdigit() == False or (a.isdigit() == True and int(a) % 2 == 0):  # naturalne z zerem?
+        if receive_data()["Operacja"] == "Con":
+
+            break
+
+start=0
+def main():
+
+    global start
+    session_id = ""
+    attempts = 0
+    serverAdressPort = (host, port)
+
+    print("IP: ", host)
+    print("Port: ", port)
+
+
+
+
+    message = encapsulation("Hi", "", "", "")
+    sock.sendto(message.encode(encoding='UTF-8'), (host, port))
+    wait_for_conf()
+
+    while True:
+        print("Waiting for connection")
+        data = receive_data()
+        if data["Operacja"] == "Hi":
+            print("Server responded with \"Hi\". Asking for ID")
+            sock.sendto(encapsulation("Con", "", "", "").encode(encoding='UTF-8'), serverAdressPort)
+            sock.sendto(encapsulation("ID", "", "", "").encode(encoding='UTF-8'), serverAdressPort)
+            wait_for_conf()
+        if data["Operacja"] == "Full":
+            print("Server is full.")
+            sock.sendto(encapsulation("Con", "", "", "").encode(encoding='UTF-8'), serverAdressPort)
+            sock.sendto(encapsulation("Bye", "", "", "").encode(encoding='UTF-8'), serverAdressPort)
+            break
+        if data["Operacja"] == "ID":
+            print("Server assigned me ID:" + data["ID"])
+            session_id = data["ID"]
+            a = input("Enter first even number:")
+            while a.isdigit() is False or (a.isdigit() is True and int(a) % 2 != 0):  # naturalne z zerem?
                 a = input('Enter an EVEN NUMBER: ')
-        sock.sendto(encapsulation("Num","",my_id,str(a)).encode(encoding='UTF-8'),serverAdressPort)
-    if MFS["Operacja"]=="Try" and MFS["Odpowiedz"]=="RDY":
-        tries=int(MFS["Data"])
-        print("Server is ready to play. You have "+MFS["Data"]+" tries.")
-        sock.sendto(encapsulation("Con", "", "", "").encode(encoding='UTF-8'), serverAdressPort)
-        a = input("Enter number between 0-1000: ")
-        while a.isdigit() == False or (a.isdigit() == True and 1000 > int(a) > -1):  # naturalne z zerem?
-            a = input('Try again: ')
-        sock.sendto(encapsulation("Try","",my_id,str(a)).encode(encoding='UTF-8'),serverAdressPort)
-    if MFS["Operacja"]=="Ans" and "TAK":
-        print("That's right, you guessed!")
-        sock.sendto(encapsulation("Con", "", my_id, "").encode(encoding='UTF-8'), serverAdressPort)
-        print("Disconnecting from a server.")
-        sock.sendto(encapsulation("Bye", "", my_id, "").encode(encoding='UTF-8'), serverAdressPort)
-    if MFS["Operacja"]=="Ans" and "END":
-        print("You ran out of tries.")
-        sock.sendto(encapsulation("Con", "", my_id, "").encode(encoding='UTF-8'), serverAdressPort)
-        sock.sendto(encapsulation("Bye", "", my_id, "").encode(encoding='UTF-8'), serverAdressPort)
-    if MFS["Operacja"]=="Ans" and "NXT":
-        tries=tries-1
-        print("You missed. Tries left: "+str(tries)+".")
-        a = input("Enter number between 0-1000: ")
-        while a.isdigit() == False or (a.isdigit() == True and 1000 > int(a) > -1):  # naturalne z zerem?
-            a = input('Try again: ')
-        sock.sendto(encapsulation("Con", "", my_id, "").encode(encoding='UTF-8'), serverAdressPort)
-        sock.sendto(encapsulation("Try", "", my_id, str(a)).encode(encoding='UTF-8'), serverAdressPort)
-    if MFS["Operacja"]=="Bye":
-        connection_established=False
+            sock.sendto(encapsulation("Con", "", session_id, "").encode(encoding='UTF-8'), serverAdressPort)
+            sock.sendto(encapsulation("Num", "", session_id, str(a)).encode(encoding='UTF-8'), serverAdressPort)
+            wait_for_conf()
+        if data["Operacja"] == "Num" and data["Odpowiedz"] == "NXT":
+            a = input("Enter second even number: ")
+            while a.isdigit() is False or (a.isdigit() is True and int(a) % 2 != 0):  # naturalne z zerem?
+                a = input('Enter an EVEN NUMBER: ')
+            sock.sendto(encapsulation("Con", "", session_id, "").encode(encoding='UTF-8'), serverAdressPort)
+            sock.sendto(encapsulation("Num", "", session_id, str(a)).encode(encoding='UTF-8'), serverAdressPort)
+            wait_for_conf()
+        if data["Operacja"] == "Num" and data["Odpowiedz"] != "NXT":
+            attempts = int(data["Dane"])
+            print("Server is ready to play. You have " + str(attempts) + " tries.")
+            guess = input("Enter number between 0-1000: ")
+            while guess.isdigit() is False or (guess.isdigit() is True and 1000 < int(guess) < -1):  # naturalne z zerem?
+                guess = input('Try again: ')
+            sock.sendto(encapsulation("Con", "", session_id, "").encode(encoding='UTF-8'), serverAdressPort)
+            sock.sendto(encapsulation("Try", "", session_id, str(guess)).encode(encoding='UTF-8'), serverAdressPort)
+            wait_for_conf()
+        if data["Operacja"] == "Ans" and data["Odpowiedz"] == "TAK":
+            print("That's right, you guessed!")
+            sock.sendto(encapsulation("Con", "", session_id, "").encode(encoding='UTF-8'), serverAdressPort)
+            print("Disconnecting from a server.")
+            sock.sendto(encapsulation("Bye", "", session_id, "").encode(encoding='UTF-8'), serverAdressPort)
+            wait_for_conf()
+        if data["Operacja"] == "Ans" and data["Odpowiedz"] == "END":
+            print("You ran out of tries.")
+            sock.sendto(encapsulation("Con", "", session_id, "").encode(encoding='UTF-8'), serverAdressPort)
+            sock.sendto(encapsulation("Bye", "", session_id, "").encode(encoding='UTF-8'), serverAdressPort)
+            wait_for_conf()
+        if data["Operacja"] == "Ans" and data["Odpowiedz"] == "NXT":
+            attempts = attempts - 1
+            print("You missed. Tries left: " + str(attempts) + ".")
+            guess = input("Enter number between 0-1000: ")
+            while guess.isdigit() is False or (guess.isdigit() is True and 1000 < int(guess) < -1):  # naturalne z zerem?
+                guess = input('Try again: ')
+            sock.sendto(encapsulation("Con", "", session_id, "").encode(encoding='UTF-8'), serverAdressPort)
+            sock.sendto(encapsulation("Try", "", session_id, str(guess)).encode(encoding='UTF-8'), serverAdressPort)
+            wait_for_conf()
+        if data["Operacja"] == "Bye":
+            break
 
-sock.close()
+    sock.close()
+    print("PROGRAM END")
 
-# sock.sendto(encapsulation(OP,ANS,ID,DATA).encode(encoding='UTF-8'),serverAdressPort)
-#
-# sock.sendto(message.encode(encoding='UTF-8'), serverAdressPort)
-# msgFromeServer=sock.recvfrom(bufferSize)
 
-# message = encapsulation("ID", "", "", "")
-#
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        sock.sendto(encapsulation("Bye", "", "", "").encode(encoding='UTF-8'), (host,port))
+        sock.close()
+
+# message = encapsulation("Con", "", "", "")
 # sock.sendto(message.encode(encoding='UTF-8'), (host, port))
-
-# data = sock.recvfrom(4096)
-# print(data)
-
-sock.close()
+#
+# message = encapsulation("ID", "", "", "")
+# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
+# data = receive_data()
+# print(data["Operacja"])
+#
+# message = encapsulation("Con", "", "", "")
+# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
+#
+# message = encapsulation("Num", "", "", "4")
+# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
+# data = receive_data()
+# print(data["Operacja"])
+#
+# message = encapsulation("Con", "", "", "")
+# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
+#
+# message = encapsulation("Num", "", "", "6")
+# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
+# data = receive_data()
+# print(data["Operacja"])
+#
+# message = encapsulation("Con", "", "", "")
+# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
+#
+# s = input("Zgadnij liczbe")
+# message = encapsulation("Try", "", "", str(s))
+# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
+# data = receive_data()
+# print(data["Operacja"])
