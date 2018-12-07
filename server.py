@@ -1,8 +1,4 @@
 #########################################################
-# TODO serwer wielowątkowy
-# TODO potwierdzenia odbioeu pakietów
-# TODO jak ograniczyć to do dwóch klientów??????? (lista dwuelementowa z ID)
-#########################################################
 #                     OPERACJE
 # Hi        Nawiązanie połączenia
 # ID        żądanie i otrzymanie ID
@@ -108,46 +104,45 @@ def clienthread(addr, ThID,session_id):
     secret=0
     attempts=0
     connection=True
-    #print("Waiting for flag to be yeet"+str(ThID))
-    evlist[ThID].wait()
+    evlist[ThID].wait() #tutaj jest wait
     while connection:
         while not Comlist[ThID].empty():
             x = Comlist[ThID].get()
             if x["Operacja"] == "Con":
-                print("Data confirmed.")
+                print("["+str(session_id)+"] Data confirmed.")
                 x=Comlist[ThID].get()
                 if x["Operacja"]=="ID":
                     sock.sendto(encapsulation("Con", "", "", "").encode(encoding='UTF-8'), addr)
                     datax=encapsulation("ID", "", str(session_id), "")
                     sock.sendto(datax.encode(encoding='UTF-8'), addr)
-                    print("Sending ID [" + str(session_id) + "] to client")
+                    print("[" + str(session_id) + "] Sending ID [" + str(session_id) + "] to client")
                 elif x["Operacja"]=="Num":
                     if len(numbers)==0:
                         numbers.append(int(x["Dane"]))
-                        print("Client [" + str(x["ID"]) + "] sent first number: " + str(numbers[0]))
+                        print("[" + str(x["ID"]) + "] Client sent first number: " + str(numbers[0]))
                         sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
                         sock.sendto(encapsulation("Num", "NXT", str(session_id), "").encode(encoding='UTF-8'), addr)
                     elif len(numbers)==1:
                         numbers.append(int(x["Dane"]))
-                        print("Client [" + str(session_id) + "] sent second number: " + str(numbers[1]))
+                        print("[" + str(session_id) + "] Client sent second number: " + str(numbers[1]))
                         attempts = int(math.floor((numbers[0] + numbers[1]) / 2))
-                        secret = random.randint(0, 255)
-                        print("Secret number is " + str(secret) + ", number of attempts is " + str(attempts))
+                        secret = random.randint(0, 1000)
+                        print("["+str(session_id)+"] Secret number is " + str(secret) + ", number of attempts is " + str(attempts))
                         sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
                         sock.sendto(encapsulation("Num", "", str(session_id), str(attempts)).encode(encoding='UTF-8'), addr)
                 elif x["Operacja"]=="Try":
                     if int(x["Dane"])==secret:
                         sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
                         sock.sendto(encapsulation("Ans", "TAK", str(session_id), "").encode(encoding='UTF-8'), addr)
-                        print("Client guessed our secret")
-                    elif attempts==0:
+                        print("["+str(session_id)+"] Client guessed our secret")
+                    elif attempts==1: #bo zero też liczył,
                         sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
                         sock.sendto(encapsulation("Ans", "END", str(session_id), "").encode(encoding='UTF-8'), addr)
-                        print("Client guessed  has no attempts left")
+                        print("[" + str(session_id) + "] Client has no attempts left")
                     else:
                         sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
                         sock.sendto(encapsulation("Ans", "NXT", str(session_id), "").encode(encoding='UTF-8'), addr)
-                        print("Client guessed wrong")
+                        print("[" + str(session_id) + "] Client guessed wrong")
                         attempts = attempts - 1
                 elif x["Operacja"] == "Bye":
                     sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
@@ -159,7 +154,7 @@ def clienthread(addr, ThID,session_id):
             elif x["Operacja"]=="Bye":
                 sock.sendto(encapsulation("Con", "", str(session_id), "").encode(encoding='UTF-8'), addr)
                 sock.sendto(encapsulation("Bye", "", str(session_id), "").encode(encoding='UTF-8'), addr)
-                print("Ending session")
+                print("[" + str(session_id) + "] Ending session")
                 connection = False
                 id_list.append(str(session_id))
                 wipe(ThID)
