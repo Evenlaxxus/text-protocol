@@ -47,9 +47,12 @@ import math
 import time
 from timeit import default_timer as timer
 
+
 # eventy do zatrzymywania wątku
 ev1 = Event()
 ev2 = Event()
+
+
 # kolejki do przechowywania komunikatów
 CL1_comqu = queue.Queue(maxsize=3)
 CL2_comqu = queue.Queue(maxsize=3)
@@ -59,6 +62,7 @@ evlist = [ev1, ev2]
 cli_addr_list = [tuple(), tuple()]
 
 
+# inicjalizacja id
 def init_id():
     x = random.randint(100, 200)
     return [x, x + 1]
@@ -74,16 +78,9 @@ def is_empty(any_structure):
     else:
         # print('Structure is empty.')
         return True
+    
 
-
-# w razie wu to
-# utc_timestamp=datetime.datetime.utcnow().timestamp()
-#
-# from datetime import timezone
-# dt = datetime(2015, 10, 19)
-# timestamp = dt.replace(tzinfo=timezone.utc).timestamp()
-# print(timestamp)
-
+# pakowanie danych
 def encapsulation(operation, answer, id, data):
     time = datetime.datetime.now().replace(microsecond=0)
 
@@ -95,6 +92,7 @@ def encapsulation(operation, answer, id, data):
             time) + "<" + "Operacja" + ">" + operation + "<" + "Odpowiedz" + ">" + answer + "<" + "Identyfikator" + ">" + id + "<" + "Dane" + ">" + data + "<"
 
 
+# rozpakowywanie danych
 def deencapsulation(recv_t):
     global addr_c
     recv = str(recv_t[0])
@@ -114,6 +112,7 @@ def wipe(id):
     cli_addr_list[id] = a
 
 
+# wątek klienta
 def clienthread(addr, ThID, session_id):
     global id_list, cli_addr_list
     sock.sendto(encapsulation("Con", "", "", "").encode(encoding='UTF-8'), addr)
@@ -192,7 +191,7 @@ def mainthread(sock):
     global Comlist, id_list
     print("Main thread start.")
     while True:
-        x = sock.recvfrom(8192)  # w najgorszym wypadku w buforze będzie con+coś z dwóch
+        x = sock.recvfrom(8192)
         data1 = deencapsulation(x)
         if data1["Operacja"] == "Hi":
             if is_empty(cli_addr_list[0]) and is_empty(cli_addr_list[1]):
