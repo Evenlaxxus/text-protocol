@@ -36,7 +36,7 @@ def receive_data():
         return None
 
 
-# domuślny adres serwera i port
+# domyślny adres serwera i port
 host = "127.0.0.1"
 port = 27015
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
