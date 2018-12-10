@@ -3,6 +3,8 @@ import datetime
 import time
 from threading import Timer
 
+
+# pakowanie danych
 def encapsulation(operation, answer, id, data):
     time = datetime.datetime.now().replace(microsecond=0)
     if data =="":
@@ -10,7 +12,8 @@ def encapsulation(operation, answer, id, data):
     else:
         return "Data" + ">" +  str(time) + "<" + "Operacja" + ">" + operation + "<" + "Odpowiedz" + ">" + answer + "<" + "Identyfikator" + ">" + id + "<" + "Dane" + ">" + data+"<"
 
-
+    
+# rozpakowywanie danych
 def deencapsulation(recv_t):
     global addr_c
     recv = str(recv_t[0])
@@ -24,6 +27,7 @@ def deencapsulation(recv_t):
     return {"Operacja": operation, "Odpowiedz": answer, "ID": id, "Dane": data}
 
 
+# otrzymywanie danych
 def receive_data():
     x = deencapsulation(sock.recvfrom(4096))
     if x:
@@ -32,11 +36,12 @@ def receive_data():
         return None
 
 
-
+# domuślny adres serwera i port
 host = "127.0.0.1"
 port = 27015
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 time_exceeded=False
+
 
 def timeout():
     global time_exceeded
@@ -45,7 +50,7 @@ def timeout():
     time_exceeded = True
 
 
-
+# oczekiwanie na potwierdzenie pakietu
 def wait_for_conf():
     t = Timer(8, timeout)
     t.start()
@@ -55,6 +60,7 @@ def wait_for_conf():
             t.cancel()
             break
 
+            
 def main():
     global time_exceeded
     session_id = ""
@@ -149,37 +155,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         sock.sendto(encapsulation("Bye", "", "", "").encode(encoding='UTF-8'), (host,port))
         sock.close()
-
-
-# message = encapsulation("Con", "", "", "")
-# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
-#
-# message = encapsulation("ID", "", "", "")
-# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
-# data = receive_data()
-# print(data["Operacja"])
-#
-# message = encapsulation("Con", "", "", "")
-# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
-#
-# message = encapsulation("Num", "", "", "4")
-# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
-# data = receive_data()
-# print(data["Operacja"])
-#
-# message = encapsulation("Con", "", "", "")
-# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
-#
-# message = encapsulation("Num", "", "", "6")
-# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
-# data = receive_data()
-# print(data["Operacja"])
-#
-# message = encapsulation("Con", "", "", "")
-# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
-#
-# s = input("Zgadnij liczbe")
-# message = encapsulation("Try", "", "", str(s))
-# sock.sendto(message.encode(encoding='UTF-8'), (host, port))
-# data = receive_data()
-# print(data["Operacja"])
