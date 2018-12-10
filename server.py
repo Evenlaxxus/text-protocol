@@ -11,7 +11,6 @@
 #########################################################
 #                     Odpowiedzi serwera
 # TAK       klient zgadł liczbę
-# NIE       klient nie zgadł liczby
 # END       wykorzystano wszystkie próby
 # NXT       podaj kolejną liczbę
 #########################################################
